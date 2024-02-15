@@ -8,8 +8,8 @@
 #include <dos.h>
 #include <stdio.h>
 
-#define ARROW_NUMBER 30
-#define TARGET_NUMBER 4
+#define ARROW_NUMBER 3000
+#define TARGET_NUMBER 2
 #define ARRSIZE 1000
 
 void interrupt (*old_int9)(void);
@@ -17,7 +17,9 @@ void interrupt (*old_int8)(void); // For timer interrupt
 volatile int ticks = 0;
 void my_sleep(float seconds);
 int counter_hit = 0;
-
+float sleep_time = 1;
+int restart_game = 0;
+int level = 1;
 
 void interrupt new_int8(void)
 {
@@ -111,9 +113,11 @@ typedef struct position
 
 void displayer(void)
 {
+
   // while (1)
   //{
-  printf(display);
+  if (counter_hit != TARGET_NUMBER)
+    printf(display);
   //} //while
 } // prntr
 
@@ -144,6 +148,8 @@ void updater()
 
   if (initial_run == 1)
   {
+    counter_hit = 0; // Reset the counter
+
     initial_run = 0;
     no_of_arrows = 0;
 
@@ -171,15 +177,11 @@ void updater()
     if (target_pos[i].x != -1 && target_pos[i].y >= 22)
     {
       // Target reached the bottom, game over
-      printf("\nGame Over! Targets reached the bottom.\n");
+      printf("\n\t\t\tGame Over! Targets reached the bottom.\n");
       my_halt();
     }
   }
-  if (counter_hit == TARGET_NUMBER)
-  {
-    printf("\nGame Over! All targets are hit.\n");
-    my_halt();
-  }
+
   while (front != -1)
   {
     ch = ch_arr[front];
@@ -218,6 +220,16 @@ void updater()
   display_draft[23][gun_position] = '|';
   display_draft[23][gun_position + 1] = '\\';
   display_draft[24][gun_position] = '|';
+  //print the level in the top right corner
+  display_draft[0][81] = 'L';
+  display_draft[0][82] = 'e';
+  display_draft[0][83] = 'v';
+  display_draft[0][84] = 'e';
+  display_draft[0][85] = 'l';
+  display_draft[0][86] = ':';
+  display_draft[0][87] = level + '0';
+  
+
   for (i = 0; i < ARROW_NUMBER; i++) // SHOOTED ARROWS
   {
     if (arrow_pos[i].x != -1) // If arrow is in the air
@@ -266,7 +278,16 @@ for (i = 0; i < ARROW_NUMBER; i++)
   for (i = 0; i < 25; i++)
     for (j = 0; j < 80; j++)
       display[i * 80 + j] = display_draft[i][j];
+      
   display[2000] = '\0';
+  if (counter_hit == TARGET_NUMBER)
+  {
+    initial_run = 1;
+    printf("\n\t\t\tCongratulations! You completed Level %d\n\t\t\tGet Ready For Faster Game !!\n", level);
+    my_sleep(2);
+    sleep_time -= 0.05;
+    level++;
+  }
 
 } // updater
 
@@ -285,7 +306,7 @@ main()
     displayer();
 
     //      delay(2700);
-    my_sleep(1);
+    my_sleep(sleep_time);
 
   } // while
 
