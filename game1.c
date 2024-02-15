@@ -157,6 +157,16 @@ void updater()
 
    } // if (initial_run ==1)
 
+      // Check if any target has reached the bottom
+    for (i = 0; i < TARGET_NUMBER; i++)
+    {
+        if (target_pos[i].x != -1 && target_pos[i].y >= 22)
+        {
+            // Target reached the bottom, game over
+            printf("\nGame Over! Targets reached the bottom.\n");
+            my_halt();
+        }
+    }
    while(front != -1)
    {
      ch = ch_arr[front];
