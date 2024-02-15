@@ -113,7 +113,6 @@ typedef struct position
 
 void displayer(void)
 {
-
   // while (1)
   //{
   if (counter_hit != TARGET_NUMBER)
