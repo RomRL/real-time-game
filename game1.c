@@ -337,7 +337,7 @@ for (i = 0; i < ARROW_NUMBER; i++)
     initial_run = 1;
     printf("\n\t\t\tCongratulations! You completed Level %d\n\t\t\tGet Ready For Faster Game !!\n", level);
     my_sleep(2);
-    sleep_time -= 0.05;
+    sleep_time -= 0.1;
     level++;
   }
 
