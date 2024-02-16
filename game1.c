@@ -8,8 +8,8 @@
 #include <dos.h>
 #include <stdio.h>
 
-#define ARROW_NUMBER 3000
-#define TARGET_NUMBER 2
+#define ARROW_NUMBER 36
+#define TARGET_NUMBER 4
 #define ARRSIZE 1000
 
 void interrupt (*old_int9)(void);
@@ -20,12 +20,13 @@ int counter_hit = 0;
 float sleep_time = 1;
 int restart_game = 0;
 int level = 1;
-
-void interrupt new_int8(void)
-{
-  ticks++;
-  (*old_int8)();
-}
+int points = 0;
+int dotPosition = 152;  // Starting position for the first point
+int pointarr[10]={0,0,0,0,0,0,0,0,0,0};
+int  far* b800h; // Pointer to video buffer
+int value, ax; // Variables for assembly code
+int tempPoints = 0;
+char display_draft[25][80];
 
 char entered_ascii_codes[ARRSIZE];
 int tail = -1;
@@ -47,6 +48,13 @@ int target_disp = 80 / TARGET_NUMBER;
 char ch;
 
 int no_of_targets;
+
+void interrupt new_int8(void)
+{
+  ticks++;
+  (*old_int8)();
+}
+
 
 void my_halt()
 {
@@ -113,13 +121,29 @@ typedef struct position
 
 void displayer(void)
 {
-  // while (1)
-  //{
-  if (counter_hit != TARGET_NUMBER)
-    printf(display);
-  //} //while
-} // prntr
+	
+	int i, j;
+	((unsigned long int)b800h) = 0xB800 * 65536;
+	for (i = 0; i < 25; i++)
+	{
+		for (j = 0; j < 80; j++)
+		{
+			int color = 256*9; // Default color (white on black)
 
+			// Set color based on the character
+			if (display_draft[i][j] == '^' || display_draft[i][j] == '/' || display_draft[i][j] == '|' || display_draft[i][j] == '\\')
+				color = 256 * 10; // green
+			else if (display_draft[i][j] == '*')
+				color = 256 * 12; // Red
+			
+
+			// Set character and color attributes in video buffer			
+			value = display_draft[i][j] + color;
+			b800h[i * 80 + j] = value;			
+		}
+	}
+
+} // prntr
 void receiver()
 {
   char temp;
@@ -136,7 +160,6 @@ void receiver()
 
 } //  receiver
 
-char display_draft[25][80];
 POSITION target_pos[TARGET_NUMBER];
 POSITION arrow_pos[ARROW_NUMBER];
 
@@ -227,7 +250,36 @@ void updater()
   display_draft[0][85] = 'l';
   display_draft[0][86] = ':';
   display_draft[0][87] = level + '0';
+  // Print the points in the right top corner
+  display_draft[0][145] = 'P';
+  display_draft[0][146] = 'o';
+  display_draft[0][147] = 'i';
+  display_draft[0][148] = 'n';
+  display_draft[0][149] = 't';
+  display_draft[0][150] = 's';
+  display_draft[0][151] = ':';
+
+  dotPosition=152;
+  tempPoints = points;
+
   
+  i=0;
+  while (tempPoints > 0)
+  {
+    pointarr[i] = tempPoints % 10;
+    tempPoints = tempPoints / 10;
+    i++;
+  }
+
+  for (j=i-1; j>=0; j--)
+  {
+    
+    display_draft[0][dotPosition] = pointarr[j] + '0';
+    dotPosition++;
+  }
+
+  
+
 
   for (i = 0; i < ARROW_NUMBER; i++) // SHOOTED ARROWS
   {
@@ -264,6 +316,7 @@ for (i = 0; i < ARROW_NUMBER; i++)
                 if (arrow_pos[i].x == target_pos[j].x && arrow_pos[i].y <= target_pos[j].y)
                 {
                     counter_hit++;
+                    points = points + level;
                     arrow_pos[i].x = arrow_pos[i].y = -1;
                     target_pos[j].x = target_pos[j].y = -1;
                     // If you want to break only from the inner loop
@@ -297,7 +350,10 @@ main()
   old_int9 = getvect(9);
   setvect(9, new_int9);
   setvect(8, new_int8);
-
+  asm{
+      MOV AH,3
+      INT 10h
+    }
   while (1)
   {
     receiver();
