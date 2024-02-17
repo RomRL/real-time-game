@@ -11,6 +11,13 @@
 #define ARROW_NUMBER 36
 #define TARGET_NUMBER 4
 #define ARRSIZE 1000
+#define GREEN 2
+#define RED 4
+#define LIGHT_GREY 7
+#define BLACK 0
+#define BLUE 1
+
+volatile int ctrl_pressed = 0;
 
 void interrupt (*old_int9)(void);
 void interrupt (*old_int8)(void); // For timer interrupt
@@ -19,6 +26,7 @@ void my_sleep(float seconds);
 int counter_hit = 0;
 float sleep_time = 1;
 int restart_game = 0;
+int target_delay = 2;
 int level = 1;
 int points = 0;
 int dotPosition = 152;  // Starting position for the first point
@@ -42,7 +50,7 @@ int gcycle_length;
 int gno_of_pids;
 
 int initial_run = 1;
-int gun_position;
+int gun_position, gun_prev_position;
 int no_of_arrows;
 int target_disp = 80 / TARGET_NUMBER;
 char ch;
@@ -67,28 +75,19 @@ void my_halt()
   // srconds 1==18 ticks
 void my_sleep(float seconds)
 {
-  float target_ticks = ticks + seconds * 18; // 18.2 ticks per second
+  float target_ticks = ticks + seconds * 18.2; // 18.2 ticks per second
   while (ticks < target_ticks);
 
 }
 
 void interrupt new_int9(void)
 {
-  char result = 0;
-  int scan = 0;
+  unsigned char scan = 0;
   int ascii = 0;
-
+  
   (*old_int9)();
 
-  asm {
-  MOV AH,1
-  INT 16h
-  JZ Skip1
-  MOV AH,0
-  INT 16h
-  MOV BYTE PTR scan,AH
-  MOV BYTE PTR ascii,AL
-  } // asm
+  scan = inp(0x60);
 
   ascii = 0;
   if (scan == 75)
@@ -97,18 +96,26 @@ void interrupt new_int9(void)
     ascii = 'w';
   else if (scan == 77)
     ascii = 'd';
-  // if ((scan == 46)&& (ascii == 3)) // Ctrl-C?
-  if ((scan == 46) && (ascii == 3)) // Ctrl-C?
-    my_halt();                      // terminate program
-  if (scan == 1)                    // Esc?
-    my_halt();                      // terminate program
 
-  if ((ascii != 0) && (tail < ARRSIZE))
-  {
+  // Check for Ctrl press or release
+  if (scan == 0x1D) { //left Ctrl code
+      ctrl_pressed = 1;
+  } else if (scan == 0x9D) { // realese left Ctrl code
+      ctrl_pressed = 0;
+  }
+
+  // Check for ctrl C
+  if (ctrl_pressed && (scan == 0x2E)) { 
+      my_halt();
+  }
+
+  if (scan == 1) // Esc?
+    my_halt();  // terminate program
+
+  if ((ascii != 0) && (tail < ARRSIZE))  {
     entered_ascii_codes[++tail] = ascii;
   } // if
 
-Skip1:
 
 } // new_int9
 
@@ -128,17 +135,23 @@ void displayer(void)
 	{
 		for (j = 0; j < 80; j++)
 		{
-			int color = 256*9; // Default color (white on black)
-
+			unsigned char foreground = BLUE; 
+			unsigned char background = LIGHT_GREY;
+			unsigned char color;
 			// Set color based on the character
-			if (display_draft[i][j] == '^' || display_draft[i][j] == '/' || display_draft[i][j] == '|' || display_draft[i][j] == '\\')
-				color = 256 * 10; // green
-			else if (display_draft[i][j] == '*')
-				color = 256 * 12; // Red
+			if (display_draft[i][j] == '^' || display_draft[i][j] == '/' || display_draft[i][j] == '|' || display_draft[i][j] == '\\'){
+				foreground = GREEN; 
+				background = BLACK;
+			}
+			else if (display_draft[i][j] == '*'){
+				foreground = RED; 
+				background = BLUE;
+			}
 			
 
 			// Set character and color attributes in video buffer			
-			value = display_draft[i][j] + color;
+			color = (background << 4) | foreground;
+			value = display_draft[i][j] | (color << 8);
 			b800h[i * 80 + j] = value;			
 		}
 	}
@@ -178,6 +191,7 @@ void updater()
     no_of_targets = TARGET_NUMBER;
 
     gun_position = 39;
+    gun_prev_position = 39;
 
     target_pos[0].x = 3;
     target_pos[0].y = 0;
@@ -236,12 +250,25 @@ void updater()
   for (i = 0; i < 25; i++)
     for (j = 0; j < 80; j++)
       display_draft[i][j] = ' '; // blank
-
+  //print the gun trail
+  for (i = gun_position - gun_prev_position; i != 0;){
+    int offset = gun_prev_position + i;
+    display_draft[22][offset] = '^';
+    display_draft[23][offset - 1] = '/';
+    display_draft[23][offset] = '|';
+    display_draft[23][offset + 1] = '\\';
+    display_draft[24][offset] = '|';
+    i < 0 ? i++ : i--;
+  }
+  //  print the gun
   display_draft[22][gun_position] = '^';
   display_draft[23][gun_position - 1] = '/';
   display_draft[23][gun_position] = '|';
   display_draft[23][gun_position + 1] = '\\';
   display_draft[24][gun_position] = '|';
+
+  gun_prev_position = gun_position;
+
   //print the level in the top right corner
   display_draft[0][81] = 'L';
   display_draft[0][82] = 'e';
@@ -298,10 +325,16 @@ void updater()
   for (i = 0; i < TARGET_NUMBER; i++)
     if (target_pos[i].x != -1)
     {
-      if (target_pos[i].y < 22)
+      if (target_pos[i].y < 22 && target_delay <= 0)
         target_pos[i].y++;
       display_draft[target_pos[i].y][target_pos[i].x] = '*';
     } // if
+
+  if (target_delay <=0)
+    target_delay = 2;
+  else 
+    target_delay--;
+
   // check if any arrow has hit any target
   // Check if any arrow has hit any target
   // Check if any arrow has hit any target
